@@ -1,0 +1,134 @@
+:root {
+  --it-color-primary: #0f4c83;
+  --it-color-bg: #fafdff;
+  --it-color-text: #121819;
+  --it-color-gray-1: #626869;
+  --it-color-gray-2: #c6cccd;
+  --it-color-danger: #e53e3e;
+  --it-color-success: #34c759;
+}
+
+body {
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  background-color: var(--it-color-bg);
+  color: var(--it-color-text);
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-main {
+  flex: 1;
+  padding: 1.5rem 1rem 2rem;
+}
+
+.navbar-brand-logo {
+  width: 32px;
+  height: 32px;
+  margin-right: 0.25rem;
+}
+
+/* Тема под палитру IntelliTicket */
+
+.btn-primary {
+  background-color: var(--it-color-primary);
+  border-color: var(--it-color-primary);
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+  background-color: #0b3962;
+  border-color: #0b3962;
+}
+
+.badge-status-open {
+  background-color: rgba(15, 76, 131, 0.08);
+  color: var(--it-color-primary);
+}
+
+.badge-status-ai {
+  background-color: rgba(52, 199, 89, 0.1);
+  color: var(--it-color-success);
+}
+
+.badge-status-waiting {
+  background-color: rgba(198, 204, 205, 0.4);
+  color: var(--it-color-gray-1);
+}
+
+.badge-status-closed {
+  background-color: rgba(18, 24, 25, 0.08);
+  color: var(--it-color-text);
+}
+
+.badge-priority-high {
+  background-color: rgba(229, 62, 62, 0.1);
+  color: var(--it-color-danger);
+}
+
+/* Карточки тикетов */
+
+.ticket-card-btn {
+  border-radius: 1rem;
+  transition: box-shadow 0.15s ease, transform 0.1s ease;
+}
+
+.ticket-card-btn:hover {
+  box-shadow: 0 0.5rem 1.4rem rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+/* Диалог по тикету */
+
+.message-thread {
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.message-bubble {
+  border-radius: 1rem;
+  padding: 0.75rem 0.9rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.message-bubble-ai {
+  background-color: #ffffff;
+  border: 1px solid rgba(12, 61, 104, 0.15);
+}
+
+.message-bubble-user {
+  background-color: var(--it-color-primary);
+  color: #ffffff;
+  margin-left: auto;
+}
+
+.message-meta {
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+
+/* Хиро-секция */
+
+.hero {
+  padding: 3rem 0 2rem;
+}
+
+.hero-title {
+  font-size: clamp(2rem, 3vw, 2.6rem);
+  font-weight: 700;
+}
+
+.hero-subtitle {
+  font-size: 0.98rem;
+  color: var(--it-color-gray-1);
+}
+
+.hero-card {
+  border-radius: 1.25rem;
+  border: none;
+  box-shadow: 0 1rem 2.5rem rgba(0, 0, 0, 0.06);
+}
