@@ -348,15 +348,314 @@ def process_ticket(
 
 ---
 
-## **Установка и запуск**
+## Установка и запуск
 
-### Манифесты для сборки docker образов
+### Манифесты для сборки Docker образов
 
-Представить весь код манифестов или ссылки на файлы с ними (при необходимости снабдить комментариями)
+Для разработки и запуска IntelliTicket в контейнерах используются Docker манифесты для трех основных сервисов: базы данных PostgreSQL, backend на FastAPI и frontend на React + Vite. Ниже приведены их содержимое и краткие комментарии.  
+
+#### docker-compose.yml
+
+```yaml
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: ticket_service_db
+    environment:
+      POSTGRES_DB: ticket_service
+      POSTGRES_USER: ticket_service_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - ticket_service_network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ticket_service_backend
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg2://ticket_service_user:${POSTGRES_PASSWORD}@db:5432/ticket_service
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      JWT_ALGORITHM: HS256
+    depends_on:
+      - db
+    ports:
+      - "8000:8000"
+    networks:
+      - ticket_service_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ticket_service_frontend
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000
+    ports:
+      - "5173:5173"
+    networks:
+      - ticket_service_network
+
+volumes:
+  db_data:
+
+networks:
+  ticket_service_network:
+    driver: bridge
+```
+
+* `db` – контейнер с PostgreSQL и именованным volume для хранения данных.  
+* `backend` – FastAPI приложение, получает настройки из `.env` и переменных окружения.  
+* `frontend` – React + Vite клиент, которому через `VITE_API_BASE_URL` передается URL backend сервера.  
+
+#### Dockerfile backend
+
+```dockerfile
+FROM python:3.11-slim AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends     build-essential     libpq-dev     && rm -rf /var/lib/apt/lists/*
+
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip &&     pip install --no-cache-dir -r requirements.txt
+
+FROM python:3.11-slim
+
+ENV PATH="/opt/venv/bin:$PATH"     PYTHONUNBUFFERED=1
+
+RUN useradd -m -u 1000 ticketservice && mkdir -p /app && chown -R ticketservice:ticketservice /app
+USER ticketservice
+WORKDIR /app
+
+COPY --from=builder /opt/venv /opt/venv
+COPY backend/ /app/
+
+EXPOSE 8000
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+Первый этап (`builder`) собирает виртуальное окружение и зависимости, второй использует облегченный образ для запуска приложения.
+
+#### Dockerfile frontend
+
+```dockerfile
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+
+COPY frontend/ ./
+
+EXPOSE 5173
+
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
+```
+
+На этапе сборки устанавливаются зависимости, далее поднимается dev сервер Vite, доступный снаружи по порту 5173.
+
+#### Скрипт запуска docker compose
+
+```bash
+#!/bin/bash
+set -e
+
+echo "=== Разvertyvanie tiket-servisa (development) ==="
+
+if ! command -v docker &>/dev/null; then
+  echo "Oshibka: Docker ne ustanovlen"
+  exit 1
+fi
+
+if ! command -v docker compose &>/dev/null; then
+  echo "Oshibka: Docker Compose ne ustanovlen"
+  exit 1
+fi
+
+if [ ! -f ".env" ]; then
+  echo "Sozdanie faila .env iz .env.example"
+  cp .env.example .env
+  echo "Zapolnite znachenija POSTGRES_PASSWORD i JWT_SECRET_KEY v faile .env pered pervym zapuskom."
+fi
+
+docker compose pull || true
+docker compose build
+docker compose up -d
+
+echo "Backend dostupen po adresu http://localhost:8000"
+echo "Frontend dostupen po adresu http://localhost:5173"
+```
+
+Скрипт проверяет наличие Docker и Docker Compose, при необходимости создает `.env` и запускает `docker compose up -d`.
+
+---
 
 ### Манифесты для развертывания k8s кластера
 
-Представить весь код манифестов или ссылки на файлы с ними (при необходимости снабдить комментариями)
+Для развертывания IntelliTicket в Kubernetes можно использовать отдельные манифесты для базы данных, backend и frontend. Предполагается, что образы уже собраны и размещены в доступном реестре (например, `ghcr.io/username/ticket-service-backend:latest` и `ghcr.io/username/ticket-service-frontend:latest`).  
+
+#### Postgres (Deployment и Service)
+
+```yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ticket-service-postgres-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ticket-service-postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ticket-service-postgres
+  template:
+    metadata:
+      labels:
+        app: ticket-service-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: ticket_service
+            - name: POSTGRES_USER
+              value: ticket_service_user
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ticket-service-secrets
+                  key: POSTGRES_PASSWORD
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            claimName: ticket-service-postgres-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ticket-service-postgres
+spec:
+  selector:
+    app: ticket-service-postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+```
+
+#### Backend (Deployment и Service)
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ticket-service-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ticket-service-backend
+  template:
+    metadata:
+      labels:
+        app: ticket-service-backend
+    spec:
+      containers:
+        - name: backend
+          image: ghcr.io/username/ticket-service-backend:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              value: postgresql+psycopg2://ticket_service_user:$(POSTGRES_PASSWORD)@ticket-service-postgres:5432/ticket_service
+            - name: JWT_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ticket-service-secrets
+                  key: JWT_SECRET_KEY
+            - name: JWT_ALGORITHM
+              value: HS256
+          envFrom:
+            - secretRef:
+                name: ticket-service-secrets
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ticket-service-backend
+spec:
+  selector:
+    app: ticket-service-backend
+  ports:
+    - port: 8000
+      targetPort: 8000
+```
+
+#### Frontend (Deployment и Service)
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ticket-service-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ticket-service-frontend
+  template:
+    metadata:
+      labels:
+        app: ticket-service-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: ghcr.io/username/ticket-service-frontend:latest
+          ports:
+            - containerPort: 5173
+          env:
+            - name: VITE_API_BASE_URL
+              value: http://ticket-service-backend:8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ticket-service-frontend
+spec:
+  type: NodePort
+  selector:
+    app: ticket-service-frontend
+  ports:
+    - port: 80
+      targetPort: 5173
+      nodePort: 30080
+```
 
 ---
 
