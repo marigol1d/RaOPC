@@ -51,6 +51,15 @@
 
 ---
 
+![alt text](assets/сlass-diagram-domain-model.png)
+Диаграмма классов доменной модели серверной части
+
+![alt text](assets/diagram-components-server.png)
+Диаграмма компонентов серверной части
+
+![alt text](assets/scenario-sequence-diagram.png)
+Диаграмма последовательности сценария
+
 ## **Функциональные возможности**
 
 ### Диаграмма вариантов использования
